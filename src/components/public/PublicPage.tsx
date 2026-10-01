@@ -90,6 +90,7 @@ export const PublicPage: React.FC<PublicPageProps> = ({
 
         <MenuSection
           productos={productos}
+          promociones={promociones}
           loading={loadingProductos}
           cart={cart}
           config={config}
