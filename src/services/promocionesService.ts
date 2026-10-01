@@ -57,6 +57,22 @@ function saveLocalPromociones(items: Promocion[]) {
   }
 }
 
+function mergePromociones(localList: Promocion[], remoteList: Promocion[]): Promocion[] {
+  const map = new Map<string, Promocion>();
+  for (const item of localList) {
+    if (item.id) map.set(item.id, item);
+  }
+  for (const item of remoteList) {
+    if (item.id) map.set(item.id, item);
+  }
+  const deletedIds = getDeletedPromoIds();
+  const merged = Array.from(map.values()).filter(
+    (p) => p.id && !deletedIds.has(p.id) && p.id !== 'promo-1' && p.id !== 'promo-2'
+  );
+  merged.sort((a, b) => (a.orden || 1) - (b.orden || 1));
+  return merged;
+}
+
 export const promocionesService = {
   subscribeToPromociones(callback: (items: Promocion[]) => void): () => void {
     // 1. Initial local load
@@ -78,7 +94,7 @@ export const promocionesService = {
         .select('*')
         .order('orden', { ascending: true })
         .then(({ data, error }) => {
-          if (!error && data && data.length > 0) {
+          if (!error && Array.isArray(data)) {
             const mapped: Promocion[] = data.map((d: any) => ({
               id: d.id,
               titulo: d.titulo || '',
@@ -87,7 +103,7 @@ export const promocionesService = {
               descuentoPorcentaje: Number(d.descuento_porcentaje || 0),
               precioOferta: Number(d.precio_oferta || 0),
               precioRegular: Number(d.precio_regular || 0),
-              etiqueta: d.etiqueta || 'OFERTA',
+              etiqueta: d.etiqueta || 'OFERTA ESPECIAL',
               imagen: d.imagen || '',
               productoId: d.producto_id || '',
               activa: d.activa !== false,
@@ -98,8 +114,9 @@ export const promocionesService = {
               createdAt: d.created_at,
               updatedAt: d.updated_at,
             }));
-            saveLocalPromociones(mapped);
-            callback(mapped);
+            const merged = mergePromociones(getLocalPromociones(), mapped);
+            saveLocalPromociones(merged);
+            callback(merged);
           }
         });
 
@@ -110,11 +127,11 @@ export const promocionesService = {
             'postgres_changes',
             { event: '*', schema: 'public', table: 'promociones' },
             async () => {
-              const { data } = await client
+              const { data, error } = await client
                 .from('promociones')
                 .select('*')
                 .order('orden', { ascending: true });
-              if (data) {
+              if (!error && Array.isArray(data)) {
                 const mapped: Promocion[] = data.map((d: any) => ({
                   id: d.id,
                   titulo: d.titulo || '',
@@ -123,7 +140,7 @@ export const promocionesService = {
                   descuentoPorcentaje: Number(d.descuento_porcentaje || 0),
                   precioOferta: Number(d.precio_oferta || 0),
                   precioRegular: Number(d.precio_regular || 0),
-                  etiqueta: d.etiqueta || 'OFERTA',
+                  etiqueta: d.etiqueta || 'OFERTA ESPECIAL',
                   imagen: d.imagen || '',
                   productoId: d.producto_id || '',
                   activa: d.activa !== false,
@@ -134,8 +151,9 @@ export const promocionesService = {
                   createdAt: d.created_at,
                   updatedAt: d.updated_at,
                 }));
-                saveLocalPromociones(mapped);
-                callback(mapped);
+                const merged = mergePromociones(getLocalPromociones(), mapped);
+                saveLocalPromociones(merged);
+                callback(merged);
               }
             }
           )

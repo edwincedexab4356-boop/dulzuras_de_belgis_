@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Tag,
   Plus,
@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { Promocion, Producto, ConfiguracionNegocio } from '../../types';
 import { promocionesService, PROMOCIONES_SQL } from '../../services/promocionesService';
-import { isSupabaseConfigured } from '../../services/supabase';
+import { isSupabaseConfigured, getSupabaseClient } from '../../services/supabase';
 import { syncService } from '../../services/syncService';
 import { formatCurrency, cleanWhatsAppNumber } from '../../utils/formatters';
 import { ImageUploadInput } from '../common/ImageUploadInput';
@@ -67,6 +67,70 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
   const [syncingSupabase, setSyncingSupabase] = useState(false);
   const isConnected = isSupabaseConfigured();
 
+  const [supabaseStatus, setSupabaseStatus] = useState<{
+    checked: boolean;
+    configured: boolean;
+    tableExists: boolean;
+    cloudCount: number;
+    errorMsg?: string;
+  }>({
+    checked: false,
+    configured: isSupabaseConfigured(),
+    tableExists: false,
+    cloudCount: 0,
+  });
+
+  const checkSupabaseStatus = async () => {
+    const configured = isSupabaseConfigured();
+    const client = getSupabaseClient();
+    if (!configured || !client) {
+      setSupabaseStatus({
+        checked: true,
+        configured: false,
+        tableExists: false,
+        cloudCount: 0,
+      });
+      return;
+    }
+
+    try {
+      const { data, error } = await client.from('promociones').select('id');
+      if (error) {
+        setSupabaseStatus({
+          checked: true,
+          configured: true,
+          tableExists: false,
+          cloudCount: 0,
+          errorMsg: error.message,
+        });
+      } else {
+        setSupabaseStatus({
+          checked: true,
+          configured: true,
+          tableExists: true,
+          cloudCount: data?.length || 0,
+        });
+      }
+    } catch (e: any) {
+      setSupabaseStatus({
+        checked: true,
+        configured: true,
+        tableExists: false,
+        cloudCount: 0,
+        errorMsg: e?.message,
+      });
+    }
+  };
+
+  useEffect(() => {
+    checkSupabaseStatus();
+    const handleCfgChanged = () => {
+      checkSupabaseStatus();
+    };
+    window.addEventListener('delicias_supabase_config_changed', handleCfgChanged);
+    return () => window.removeEventListener('delicias_supabase_config_changed', handleCfgChanged);
+  }, []);
+
   const handleCopySql = () => {
     navigator.clipboard.writeText(PROMOCIONES_SQL);
     setSqlCopied(true);
@@ -77,7 +141,8 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
     setSyncingSupabase(true);
     try {
       const res = await syncService.sincronizarTodoConSupabase();
-      setFeedback(`¡Sincronización a Supabase completada! Se subieron ${res.promocionesCount || promociones.length} promociones.`);
+      setFeedback(`¡Sincronización a Supabase completada! Se subieron ${res.promocionesCount || promociones.length} promociones a la nube.`);
+      await checkSupabaseStatus();
       onRefreshData?.();
       setTimeout(() => setFeedback(null), 5000);
     } catch (err: any) {
@@ -141,17 +206,24 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
     try {
       if (editingPromo.id) {
         await promocionesService.actualizarPromocion(editingPromo.id, editingPromo);
-        setFeedback('Promoción actualizada con éxito.');
+        setFeedback('✓ Promoción actualizada con éxito.');
       } else {
         await promocionesService.crearPromocion(editingPromo as any);
-        setFeedback('Nueva promoción creada con éxito.');
+        setFeedback('✓ Nueva promoción guardada con éxito.');
       }
       setIsModalOpen(false);
       setEditingPromo(null);
+      await checkSupabaseStatus();
       onRefreshData?.();
       setTimeout(() => setFeedback(null), 3500);
     } catch (err: any) {
-      setFeedback('Error al guardar: ' + (err.message || 'Error desconocido'));
+      // Keep changes saved locally and close modal, while displaying clear cloud notification
+      setIsModalOpen(false);
+      setEditingPromo(null);
+      onRefreshData?.();
+      setFeedback(err.message || 'Error al guardar la promoción.');
+      await checkSupabaseStatus();
+      setTimeout(() => setFeedback(null), 8000);
     } finally {
       setLoading(false);
     }
@@ -273,6 +345,75 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Real-time Cloud Status Banner */}
+      {supabaseStatus.checked && (
+        <>
+          {!supabaseStatus.configured ? (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block text-amber-900 font-bold text-sm">
+                    Modo Local: Supabase no está conectado en este navegador
+                  </strong>
+                  <p className="text-amber-800 text-[11px] mt-0.5 leading-relaxed">
+                    Tus promociones se guardan en la memoria de este equipo, pero <strong>no se guardan en la nube</strong> porque faltan las credenciales de Supabase.
+                    Para conectarlo, ve a la pestaña <strong>"Configuración" &gt; apartado "Supabase"</strong> y guarda tu <strong>Project URL</strong> y <strong>Anon Key</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : !supabaseStatus.tableExists ? (
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-300 text-rose-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block text-rose-900 font-bold text-sm">
+                    Falta crear la tabla "promociones" en tu base de datos de Supabase
+                  </strong>
+                  <p className="text-rose-800 text-[11px] mt-0.5 leading-relaxed">
+                    Supabase está conectado, pero rechaza guardar porque la tabla <code className="bg-rose-100 px-1 rounded font-mono font-bold">promociones</code> no existe en PostgreSQL.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowSqlModal(true)}
+                  className="px-3.5 py-2 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <FileCode className="w-4 h-4" />
+                  <span>Ver SQL y Solucionar</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <div>
+                  <span className="font-bold text-emerald-900">
+                    Nube Activa con Supabase
+                  </span>
+                  <span className="text-emerald-700 text-[11px] ml-1.5">
+                    — Tabla <code className="font-mono">promociones</code> lista con {supabaseStatus.cloudCount} promociones sincronizadas en tiempo real.
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleSyncPromociones}
+                disabled={syncingSupabase}
+                className="px-3 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer disabled:opacity-50 self-start sm:self-auto"
+              >
+                <CloudUpload className="w-3.5 h-3.5" />
+                <span>{syncingSupabase ? 'Subiendo...' : 'Sincronizar ahora'}</span>
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Guide Banner */}
       <div className="p-4 rounded-2xl bg-gradient-to-r from-pink-50 via-amber-50/50 to-pink-50 border border-pink-200 text-xs text-stone-700 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
