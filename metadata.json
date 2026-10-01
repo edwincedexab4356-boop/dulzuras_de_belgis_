@@ -1,0 +1,6 @@
+{
+  "name": "Delicias Belgi",
+  "description": "Dulzuras de Belgi's: repostería artesanal para todos tus eventos en Panamá. Control de terminal de cajero por jornada, catálogo interactivo, pedidos por WhatsApp, promociones dinámicas y gestión administrativa.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
