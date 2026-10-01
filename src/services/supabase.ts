@@ -7,9 +7,13 @@ interface SupabaseConfig {
   anonKey: string;
 }
 
+const DEFAULT_SUPABASE_URL = 'https://pomwijmwjxksyvlfrgdn.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvbXdpam13anhrc3l2bGZyZ2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3MDQ1MzAsImV4cCI6MjEwNjI4MDUzMH0.tbAvgxaYHHa9GE8VxY7tpO61k6z0aqI661NkXuNubC8';
+
 export function getSupabaseConfig(): SupabaseConfig {
-  let url = (import.meta.env.VITE_SUPABASE_URL || '').trim();
-  let anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+  let url = (import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL).trim();
+  let anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY).trim();
 
   if (typeof localStorage !== 'undefined') {
     try {
