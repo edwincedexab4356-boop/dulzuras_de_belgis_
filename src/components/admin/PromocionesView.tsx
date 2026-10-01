@@ -71,12 +71,14 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
     checked: boolean;
     configured: boolean;
     tableExists: boolean;
+    isPermissionDenied: boolean;
     cloudCount: number;
     errorMsg?: string;
   }>({
     checked: false,
     configured: isSupabaseConfigured(),
     tableExists: false,
+    isPermissionDenied: false,
     cloudCount: 0,
   });
 
@@ -88,6 +90,7 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
         checked: true,
         configured: false,
         tableExists: false,
+        isPermissionDenied: false,
         cloudCount: 0,
       });
       return;
@@ -96,10 +99,12 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
     try {
       const { data, error } = await client.from('promociones').select('id');
       if (error) {
+        const isPerm = error.code === '42501' || error.message?.includes('permission denied');
         setSupabaseStatus({
           checked: true,
           configured: true,
-          tableExists: false,
+          tableExists: isPerm, // The table exists in PostgreSQL, but permission was denied
+          isPermissionDenied: isPerm,
           cloudCount: 0,
           errorMsg: error.message,
         });
@@ -108,14 +113,17 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
           checked: true,
           configured: true,
           tableExists: true,
+          isPermissionDenied: false,
           cloudCount: data?.length || 0,
         });
       }
     } catch (e: any) {
+      const isPerm = e?.code === '42501' || e?.message?.includes('permission denied');
       setSupabaseStatus({
         checked: true,
         configured: true,
-        tableExists: false,
+        tableExists: isPerm,
+        isPermissionDenied: isPerm,
         cloudCount: 0,
         errorMsg: e?.message,
       });
@@ -362,6 +370,30 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
                     Para conectarlo, ve a la pestaña <strong>"Configuración" &gt; apartado "Supabase"</strong> y guarda tu <strong>Project URL</strong> y <strong>Anon Key</strong>.
                   </p>
                 </div>
+              </div>
+            </div>
+          ) : supabaseStatus.isPermissionDenied ? (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block text-amber-900 font-bold text-sm">
+                    Faltan permisos de acceso en Supabase (Error 42501: permission denied)
+                  </strong>
+                  <p className="text-amber-800 text-[11px] mt-0.5 leading-relaxed">
+                    ¡La tabla <code className="bg-amber-100 px-1 rounded font-mono font-bold">promociones</code> ya está creada en tu base de datos! Sin embargo, PostgreSQL tiene bloqueado el permiso a la clave pública anon. Debes ejecutar el comando <code className="bg-amber-100 px-1 rounded font-mono font-bold">GRANT</code> en Supabase para desbloquearla.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowSqlModal(true)}
+                  className="px-3.5 py-2 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <FileCode className="w-4 h-4" />
+                  <span>Ver SQL y Desbloquear</span>
+                </button>
               </div>
             </div>
           ) : !supabaseStatus.tableExists ? (

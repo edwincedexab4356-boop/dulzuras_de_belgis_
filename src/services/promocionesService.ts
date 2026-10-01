@@ -395,12 +395,19 @@ CREATE TABLE IF NOT EXISTS public.promociones (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- CONCEDER PERMISOS AL ROL PÚBLICO (ANON) Y AUTENTICADO DE SUPABASE
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.promociones TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+
 -- Habilitar seguridad de nivel de fila (RLS)
 ALTER TABLE public.promociones ENABLE ROW LEVEL SECURITY;
 
--- Política de lectura y escritura libre
+-- Política de lectura y escritura para anon y authenticated
 DROP POLICY IF EXISTS "acceso_total_promociones" ON public.promociones;
-CREATE POLICY "acceso_total_promociones" ON public.promociones FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "acceso_total_promociones" ON public.promociones FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- Agregar a publicación Realtime de Supabase
 DO $$

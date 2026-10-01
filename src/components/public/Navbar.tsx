@@ -20,10 +20,39 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const tapCountRef = React.useRef(0);
+  const tapTimerRef = React.useRef<any>(null);
 
   const handleNavClick = (sectionId: string) => {
     onNavigate(sectionId);
     setMobileMenuOpen(false);
+  };
+
+  const handleLogoTap = () => {
+    tapCountRef.current += 1;
+
+    if (tapTimerRef.current) {
+      clearTimeout(tapTimerRef.current);
+    }
+
+    if (tapCountRef.current >= 3) {
+      tapCountRef.current = 0;
+      try {
+        if ('vibrate' in navigator) {
+          navigator.vibrate([40, 60, 40]);
+        }
+      } catch {}
+      onGoToAdmin();
+      return;
+    }
+
+    // Normal click behavior if not 3 clicks
+    tapTimerRef.current = setTimeout(() => {
+      if (tapCountRef.current === 1) {
+        handleNavClick('inicio');
+      }
+      tapCountRef.current = 0;
+    }, 450);
   };
 
   const waNumber = cleanWhatsAppNumber(config.whatsapp || '50767979141');
@@ -35,10 +64,11 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-40 bg-[#faf6f8]/95 backdrop-blur-md border-b border-pink-100 transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          {/* Brand Logo */}
+          {/* Brand Logo with 3-tap admin shortcut */}
           <div
-            onClick={() => handleNavClick('inicio')}
-            className="flex items-center gap-3 cursor-pointer group select-none"
+            onClick={handleLogoTap}
+            className="flex items-center gap-3 cursor-pointer group select-none active:scale-95 transition-transform"
+            title="Dulzuras de Belgi's (Toca 3 veces para entrar al modo Admin)"
           >
             {config.logoUrl ? (
               <img

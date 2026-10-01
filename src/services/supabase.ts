@@ -401,6 +401,14 @@ CREATE POLICY "acceso_total_usuarios" ON public.usuarios FOR ALL USING (true) WI
 DROP POLICY IF EXISTS "acceso_total_turnos" ON public.turnos_caja;
 CREATE POLICY "acceso_total_turnos" ON public.turnos_caja FOR ALL USING (true) WITH CHECK (true);
 
+-- Conceder permisos de lectura y escritura al rol anon y authenticated de Supabase
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+
 -- ====================================================================
 -- 11. INICIALIZAR USUARIOS Y ROLES (ADMIN & CAJERO)
 -- ====================================================================

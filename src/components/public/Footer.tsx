@@ -12,6 +12,23 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({ config, onGoToAdmin }) => {
   const currentYear = new Date().getFullYear();
   const waNumber = cleanWhatsAppNumber(config.whatsapp || '50767979141');
+  const footerTapCountRef = React.useRef(0);
+  const footerTapTimerRef = React.useRef<any>(null);
+
+  const handleFooterLogoTap = () => {
+    footerTapCountRef.current += 1;
+    if (footerTapTimerRef.current) {
+      clearTimeout(footerTapTimerRef.current);
+    }
+    if (footerTapCountRef.current >= 3) {
+      footerTapCountRef.current = 0;
+      onGoToAdmin();
+      return;
+    }
+    footerTapTimerRef.current = setTimeout(() => {
+      footerTapCountRef.current = 0;
+    }, 450);
+  };
 
   return (
     <footer className="bg-stone-900 text-stone-300 py-12 border-t border-stone-800">
@@ -20,7 +37,11 @@ export const Footer: React.FC<FooterProps> = ({ config, onGoToAdmin }) => {
           
           {/* Brand */}
           <div className="md:col-span-2 space-y-3">
-            <div className="flex items-center gap-3">
+            <div
+              onClick={handleFooterLogoTap}
+              className="flex items-center gap-3 cursor-pointer group select-none active:scale-95 transition-transform inline-flex"
+              title="Dulzuras de Belgi's (Toca 3 veces para entrar al modo Admin)"
+            >
               {config.logoUrl ? (
                 <img
                   src={config.logoUrl}
