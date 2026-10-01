@@ -151,7 +151,7 @@ export const CajerosManager: React.FC<CajerosManagerProps> = ({
 
       {/* Formulario para agregar cajero */}
       {!readOnly && (
-        <form onSubmit={handleAgregar} className="space-y-2">
+        <div className="space-y-2">
           <label className="block text-xs font-bold uppercase tracking-wider text-stone-700">
             Agregar Nuevo Nombre de Cajero
           </label>
@@ -161,13 +161,20 @@ export const CajerosManager: React.FC<CajerosManagerProps> = ({
                 type="text"
                 value={nuevoNombre}
                 onChange={(e) => setNuevoNombre(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAgregar();
+                  }
+                }}
                 placeholder="Ejemplo: Ana Victoria Rodríguez"
                 disabled={isSaving}
                 className="w-full px-4 py-2.5 text-xs sm:text-sm rounded-xl border border-stone-300 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all font-medium text-stone-800 placeholder:text-stone-400"
               />
             </div>
             <button
-              type="submit"
+              type="button"
+              onClick={() => handleAgregar()}
               disabled={isSaving || !nuevoNombre.trim()}
               className="px-5 py-2.5 rounded-xl bg-pink-700 hover:bg-pink-800 disabled:opacity-50 text-white text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
             >
@@ -178,7 +185,7 @@ export const CajerosManager: React.FC<CajerosManagerProps> = ({
           <p className="text-[11px] text-stone-400">
             Presiona <kbd className="px-1.5 py-0.5 bg-stone-100 rounded text-stone-600 font-mono text-[10px]">Enter</kbd> o haz clic en Agregar Cajero.
           </p>
-        </form>
+        </div>
       )}
 
       {/* Buscador rápido si hay más de 3 cajeros */}
