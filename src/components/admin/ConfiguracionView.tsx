@@ -125,7 +125,7 @@ export const ConfiguracionView: React.FC<ConfiguracionViewProps> = ({
     try {
       const res = await syncService.sincronizarTodoConSupabase();
       setSuccessMsg(
-        `¡Sincronización a Supabase completada! Se subieron ${res.productosCount} productos, ${res.categoriasCount} categorías, ${res.ventasCount} ventas y ${res.produccionesCount} producciones.`
+        `¡Sincronización a Supabase completada! Se subieron ${res.productosCount} productos, ${res.promocionesCount || 0} promociones, ${res.categoriasCount} categorías, ${res.ventasCount} ventas y ${res.produccionesCount} producciones.`
       );
       onRefreshData?.();
       setTimeout(() => setSuccessMsg(null), 6000);

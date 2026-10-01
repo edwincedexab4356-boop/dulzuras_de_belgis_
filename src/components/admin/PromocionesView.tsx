@@ -17,9 +17,15 @@ import {
   ArrowRight,
   ExternalLink,
   MessageCircle,
+  FileCode,
+  Copy,
+  CloudUpload,
+  Database,
 } from 'lucide-react';
 import { Promocion, Producto, ConfiguracionNegocio } from '../../types';
-import { promocionesService } from '../../services/promocionesService';
+import { promocionesService, PROMOCIONES_SQL } from '../../services/promocionesService';
+import { isSupabaseConfigured } from '../../services/supabase';
+import { syncService } from '../../services/syncService';
 import { formatCurrency, cleanWhatsAppNumber } from '../../utils/formatters';
 import { ImageUploadInput } from '../common/ImageUploadInput';
 
@@ -54,6 +60,33 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [isClearAllOpen, setIsClearAllOpen] = useState(false);
   const [clearAllLoading, setClearAllLoading] = useState(false);
+
+  // Supabase quick tools state
+  const [showSqlModal, setShowSqlModal] = useState(false);
+  const [sqlCopied, setSqlCopied] = useState(false);
+  const [syncingSupabase, setSyncingSupabase] = useState(false);
+  const isConnected = isSupabaseConfigured();
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(PROMOCIONES_SQL);
+    setSqlCopied(true);
+    setTimeout(() => setSqlCopied(false), 3000);
+  };
+
+  const handleSyncPromociones = async () => {
+    setSyncingSupabase(true);
+    try {
+      const res = await syncService.sincronizarTodoConSupabase();
+      setFeedback(`¡Sincronización a Supabase completada! Se subieron ${res.promocionesCount || promociones.length} promociones.`);
+      onRefreshData?.();
+      setTimeout(() => setFeedback(null), 5000);
+    } catch (err: any) {
+      setFeedback('Error al sincronizar con Supabase: ' + (err.message || 'Error desconocido'));
+      setTimeout(() => setFeedback(null), 7000);
+    } finally {
+      setSyncingSupabase(false);
+    }
+  };
 
   const activeCount = promociones.filter((p) => p.activa).length;
   const floatingCount = promociones.filter((p) => p.activa && p.mostrarModalInicio).length;
@@ -189,7 +222,36 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSqlModal(true)}
+            className="px-3.5 py-2.5 rounded-2xl border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-900 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="Ver código SQL para crear la tabla promociones en Supabase"
+          >
+            <FileCode className="w-4 h-4 text-emerald-700" />
+            <span className="hidden sm:inline">1. Ver SQL Supabase</span>
+            <span className="sm:hidden">SQL</span>
+          </button>
+
+          {isConnected && (
+            <button
+              type="button"
+              onClick={handleSyncPromociones}
+              disabled={syncingSupabase}
+              className="px-3.5 py-2.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Sincronizar tus promociones a la base de datos en la nube"
+            >
+              {syncingSupabase ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <CloudUpload className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">2. Sincronizar en la Nube</span>
+              <span className="sm:hidden">Subir</span>
+            </button>
+          )}
+
           {promociones.length > 0 && (
             <button
               type="button"
@@ -750,6 +812,76 @@ export const PromocionesView: React.FC<PromocionesViewProps> = ({
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs disabled:opacity-50 cursor-pointer"
               >
                 {clearAllLoading ? 'Vaciando...' : 'Sí, Vaciar Todo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Script SQL de Supabase para Promociones */}
+      {showSqlModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white max-w-xl w-full p-6 rounded-3xl shadow-2xl border border-stone-200 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-stone-900 text-base">
+                    Script SQL para Crear la Tabla "promociones"
+                  </h3>
+                  <p className="text-[11px] text-stone-500">
+                    Ejecútalo una sola vez en tu panel de Supabase en la nube.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSqlModal(false)}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-stone-700">
+              <p className="font-semibold text-stone-900">
+                Pasos para que se guarden en la nube de Supabase:
+              </p>
+              <ol className="list-decimal pl-4 space-y-1 text-[11px] text-stone-600">
+                <li>Entra a tu cuenta en <strong className="text-emerald-700">Supabase.com</strong> y abre tu proyecto.</li>
+                <li>En el menú lateral izquierdo haz clic en <strong>SQL Editor</strong>.</li>
+                <li>Presiona <strong>New query</strong>.</li>
+                <li>Haz clic en el botón verde de abajo <strong>"Copiar Código SQL"</strong>, pégalo en Supabase y presiona <strong>RUN</strong>.</li>
+                <li>¡Listo! Tu tabla de promociones quedará creada con permisos de lectura, escritura y sincronización en tiempo real.</li>
+              </ol>
+            </div>
+
+            <div className="relative">
+              <div className="flex items-center justify-between bg-stone-800 text-stone-200 px-3 py-2 rounded-t-xl text-[11px] font-mono">
+                <span>tabla_promociones.sql</span>
+                <button
+                  type="button"
+                  onClick={handleCopySql}
+                  className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 cursor-pointer text-xs transition-colors"
+                >
+                  {sqlCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{sqlCopied ? '¡Copiado al Portapapeles!' : 'Copiar Código SQL'}</span>
+                </button>
+              </div>
+              <pre className="p-3.5 rounded-b-xl bg-stone-900 text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-64 select-all">
+                {PROMOCIONES_SQL}
+              </pre>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowSqlModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs cursor-pointer shadow-xs"
+              >
+                Entendido / Cerrar
               </button>
             </div>
           </div>

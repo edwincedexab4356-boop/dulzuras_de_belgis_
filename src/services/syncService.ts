@@ -5,6 +5,7 @@ import { produccionService } from './produccionService';
 import { inventarioService } from './inventarioService';
 import { ventasService } from './ventasService';
 import { configuracionService } from './configuracionService';
+import { promocionesService } from './promocionesService';
 
 export interface SyncResult {
   productosCount: number;
@@ -12,6 +13,7 @@ export interface SyncResult {
   produccionesCount: number;
   movimientosCount: number;
   ventasCount: number;
+  promocionesCount: number;
   success: boolean;
   errorMessage?: string;
 }
@@ -32,6 +34,7 @@ export const syncService = {
       produccionesCount: 0,
       movimientosCount: 0,
       ventasCount: 0,
+      promocionesCount: 0,
       success: false,
     };
 
@@ -170,6 +173,38 @@ export const syncService = {
       const { error } = await client.from('ventas').upsert(ventasRows, { onConflict: 'id' });
       if (!error) {
         result.ventasCount = localVentas.length;
+      }
+    }
+
+    // 7. Promociones
+    const localPromos = promocionesService.getLocalPromociones();
+    if (localPromos.length > 0) {
+      const promoRows = localPromos
+        .filter((p) => Boolean(p.id))
+        .map((p) => ({
+          id: p.id,
+          titulo: p.titulo,
+          subtitulo: p.subtitulo || '',
+          descripcion: p.descripcion || '',
+          descuento_porcentaje: Number(p.descuentoPorcentaje) || 0,
+          precio_oferta: Number(p.precioOferta) || 0,
+          precio_regular: Number(p.precioRegular) || 0,
+          etiqueta: p.etiqueta || 'OFERTA ESPECIAL',
+          imagen: p.imagen || '',
+          producto_id: p.productoId || '',
+          activa: p.activa !== false,
+          mostrar_modal_inicio: p.mostrarModalInicio !== false,
+          fecha_inicio: p.fechaInicio || '',
+          fecha_fin: p.fechaFin || '',
+          orden: Number(p.orden) || 1,
+          created_at: p.createdAt || now,
+          updated_at: now,
+        }));
+      const { error } = await client.from('promociones').upsert(promoRows, { onConflict: 'id' });
+      if (!error) {
+        result.promocionesCount = localPromos.length;
+      } else {
+        console.warn('Error sincronizando promociones con Supabase:', error);
       }
     }
 

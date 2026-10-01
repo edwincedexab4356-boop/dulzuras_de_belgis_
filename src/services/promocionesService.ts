@@ -190,6 +190,10 @@ export const promocionesService = {
     return getLocalPromociones();
   },
 
+  getLocalPromociones(): Promocion[] {
+    return getLocalPromociones();
+  },
+
   async crearPromocion(promo: Omit<Promocion, 'id'>): Promise<Promocion> {
     const id = 'promo-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
     const newPromo: Promocion = {
@@ -209,25 +213,39 @@ export const promocionesService = {
     const client = getSupabaseClient();
     if (client && isSupabaseConfigured()) {
       try {
-        await client.from('promociones').insert({
+        const payload = {
           id: newPromo.id,
           titulo: newPromo.titulo,
           subtitulo: newPromo.subtitulo || '',
           descripcion: newPromo.descripcion || '',
-          descuento_porcentaje: newPromo.descuentoPorcentaje || 0,
-          precio_oferta: newPromo.precioOferta || 0,
-          precio_regular: newPromo.precioRegular || 0,
-          etiqueta: newPromo.etiqueta || 'OFERTA',
+          descuento_porcentaje: Number(newPromo.descuentoPorcentaje) || 0,
+          precio_oferta: Number(newPromo.precioOferta) || 0,
+          precio_regular: Number(newPromo.precioRegular) || 0,
+          etiqueta: newPromo.etiqueta || 'OFERTA ESPECIAL',
           imagen: newPromo.imagen || '',
           producto_id: newPromo.productoId || '',
           activa: newPromo.activa !== false,
           mostrar_modal_inicio: newPromo.mostrarModalInicio !== false,
           fecha_inicio: newPromo.fechaInicio || '',
           fecha_fin: newPromo.fechaFin || '',
-          orden: newPromo.orden || 1,
-        });
-      } catch (e) {
-        console.warn('Error creating promocion in Supabase:', e);
+          orden: Number(newPromo.orden) || 1,
+          created_at: newPromo.createdAt,
+          updated_at: newPromo.updatedAt,
+        };
+        const { error } = await client.from('promociones').upsert(payload, { onConflict: 'id' });
+        if (error) {
+          console.error('Error insertando promoción en Supabase:', error);
+          if (error.code === '42P01' || error.message?.includes('promociones') || error.message?.includes('does not exist')) {
+            throw new Error(
+              'La tabla "promociones" NO existe aún en tu base de datos de Supabase en la nube. ' +
+              'Debes crearla pegando el código SQL en Supabase > SQL Editor > RUN.'
+            );
+          }
+          throw new Error('Supabase: ' + (error.message || 'Error al persistir'));
+        }
+      } catch (e: any) {
+        console.error('Error creating promocion in Supabase:', e);
+        throw e;
       }
     }
 
@@ -254,9 +272,9 @@ export const promocionesService = {
         if (updates.titulo !== undefined) payload.titulo = updates.titulo;
         if (updates.subtitulo !== undefined) payload.subtitulo = updates.subtitulo;
         if (updates.descripcion !== undefined) payload.descripcion = updates.descripcion;
-        if (updates.descuentoPorcentaje !== undefined) payload.descuento_porcentaje = updates.descuentoPorcentaje;
-        if (updates.precioOferta !== undefined) payload.precio_oferta = updates.precioOferta;
-        if (updates.precioRegular !== undefined) payload.precio_regular = updates.precioRegular;
+        if (updates.descuentoPorcentaje !== undefined) payload.descuento_porcentaje = Number(updates.descuentoPorcentaje) || 0;
+        if (updates.precioOferta !== undefined) payload.precio_oferta = Number(updates.precioOferta) || 0;
+        if (updates.precioRegular !== undefined) payload.precio_regular = Number(updates.precioRegular) || 0;
         if (updates.etiqueta !== undefined) payload.etiqueta = updates.etiqueta;
         if (updates.imagen !== undefined) payload.imagen = updates.imagen;
         if (updates.productoId !== undefined) payload.producto_id = updates.productoId;
@@ -264,11 +282,22 @@ export const promocionesService = {
         if (updates.mostrarModalInicio !== undefined) payload.mostrar_modal_inicio = updates.mostrarModalInicio;
         if (updates.fechaInicio !== undefined) payload.fecha_inicio = updates.fechaInicio;
         if (updates.fechaFin !== undefined) payload.fecha_fin = updates.fechaFin;
-        if (updates.orden !== undefined) payload.orden = updates.orden;
+        if (updates.orden !== undefined) payload.orden = Number(updates.orden) || 1;
 
-        await client.from('promociones').update(payload).eq('id', id);
-      } catch (e) {
-        console.warn('Error updating promocion in Supabase:', e);
+        const { error } = await client.from('promociones').upsert({ id, ...payload }, { onConflict: 'id' });
+        if (error) {
+          console.error('Error actualizando promoción en Supabase:', error);
+          if (error.code === '42P01' || error.message?.includes('promociones') || error.message?.includes('does not exist')) {
+            throw new Error(
+              'La tabla "promociones" NO existe en tu base de datos de Supabase. ' +
+              'Ejecuta el código SQL en Supabase > SQL Editor > RUN.'
+            );
+          }
+          throw new Error('Supabase: ' + (error.message || 'Error al persistir'));
+        }
+      } catch (e: any) {
+        console.error('Error updating promocion in Supabase:', e);
+        throw e;
       }
     }
 
@@ -326,3 +355,40 @@ export const promocionesService = {
     }
   },
 };
+
+export const PROMOCIONES_SQL = `-- TABLA DE PROMOCIONES Y OFERTAS EN SUPABASE
+CREATE TABLE IF NOT EXISTS public.promociones (
+  id TEXT PRIMARY KEY,
+  titulo TEXT NOT NULL,
+  subtitulo TEXT DEFAULT '',
+  descripcion TEXT DEFAULT '',
+  descuento_porcentaje NUMERIC(5,2) DEFAULT 0,
+  precio_oferta NUMERIC(10,2) DEFAULT 0.00,
+  precio_regular NUMERIC(10,2) DEFAULT 0.00,
+  etiqueta TEXT DEFAULT 'OFERTA ESPECIAL',
+  imagen TEXT DEFAULT '',
+  producto_id TEXT DEFAULT '',
+  activa BOOLEAN NOT NULL DEFAULT true,
+  mostrar_modal_inicio BOOLEAN NOT NULL DEFAULT true,
+  fecha_inicio TEXT DEFAULT '',
+  fecha_fin TEXT DEFAULT '',
+  orden INT DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Habilitar seguridad de nivel de fila (RLS)
+ALTER TABLE public.promociones ENABLE ROW LEVEL SECURITY;
+
+-- Política de lectura y escritura libre
+DROP POLICY IF EXISTS "acceso_total_promociones" ON public.promociones;
+CREATE POLICY "acceso_total_promociones" ON public.promociones FOR ALL USING (true) WITH CHECK (true);
+
+-- Agregar a publicación Realtime de Supabase
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.promociones;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END $$;`;
