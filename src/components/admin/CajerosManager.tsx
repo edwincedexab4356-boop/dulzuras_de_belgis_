@@ -125,7 +125,7 @@ export const CajerosManager: React.FC<CajerosManagerProps> = ({
               </span>
             </h3>
             <p className="text-xs text-stone-500 mt-0.5">
-              Agrega y administra los nombres del personal autorizado para operar turnos en la terminal de cobro. Se guardan directamente en el sistema.
+              Agrega y administra los nombres del personal autorizado para operar en la terminal de cobro. Se guardan directamente en el sistema.
             </p>
           </div>
         </div>
@@ -275,10 +275,10 @@ export const CajerosManager: React.FC<CajerosManagerProps> = ({
             ¿Dónde se utilizan estos nombres?
           </p>
           <p className="text-amber-800">
-            1. En la <strong>pantalla de inicio de sesión</strong> de la Terminal de Cajero para seleccionar quién abre el turno.
+            1. En la <strong>pantalla de inicio de sesión</strong> de la Terminal de Cajero para seleccionar quién está atendiendo.
           </p>
           <p className="text-amber-800">
-            2. En el <strong>punto de venta (POS)</strong> al realizar un cambio de cajero de jornada.
+            2. En el <strong>punto de venta (POS)</strong> para identificar al cajero responsable del cobro.
           </p>
           <p className="text-amber-800">
             3. En los <strong>tickets y comprobantes</strong> impresos para auditoría de ventas.
@@ -303,7 +303,7 @@ export const CajerosManager: React.FC<CajerosManagerProps> = ({
                 <strong className="text-stone-900">{cajeroAEliminar}</strong> del personal de caja?
               </p>
               <p className="text-[11px] text-stone-400 mt-2">
-                Ya no aparecerá en el selector de turnos para el punto de venta.
+                Ya no aparecerá en la lista de cajeros para el punto de venta.
               </p>
             </div>
 

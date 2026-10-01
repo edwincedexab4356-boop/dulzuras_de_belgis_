@@ -31,7 +31,6 @@ import {
 import { Venta, Producto, MetodoPago, VentaItem, UserAuth, ConfiguracionNegocio, AdminTab } from '../../types';
 import { ventasService } from '../../services/ventasService';
 import { authService } from '../../services/authService';
-import { turnosCajaService, TurnoCaja } from '../../services/turnosCajaService';
 import { formatCurrency, formatFechaCorta, getPanamaTodayYMD } from '../../utils/formatters';
 import { ResumenVentasView } from './ResumenVentasView';
 
@@ -55,117 +54,13 @@ export const VentasView: React.FC<VentasViewProps> = ({
   // If user is admin, default to sales history; if cashier, default to POS
   const isAdmin = user.role === 'admin';
   const canAdminBuy = Boolean(config?.permitirAdminCompras);
-  const [activeSubTab, setActiveSubTab] = useState<'pos' | 'historial' | 'resumen' | 'turnos'>(
+  const [activeSubTab, setActiveSubTab] = useState<'pos' | 'historial' | 'resumen'>(
     isAdmin ? 'historial' : 'pos'
   );
 
-  // Turnos de Caja (persistidos en Firestore: turnos_caja)
-  const [turnos, setTurnos] = useState<TurnoCaja[]>([]);
-  const [isTurnoModalOpen, setIsTurnoModalOpen] = useState<boolean>(false);
-  const [turnoModalAction, setTurnoModalAction] = useState<'abrir' | 'cerrar'>('abrir');
-  const [montoInicialTurnoInput, setMontoInicialTurnoInput] = useState<string>('50.00');
-  const [montoFinalTurnoInput, setMontoFinalTurnoInput] = useState<string>('');
-  const [cajeroTurnoInput, setCajeroTurnoInput] = useState<string>(
-    user.cajeroJornada || user.displayName || (user.email ? user.email.split('@')[0] : 'Cajero')
-  );
-  const [observacionesTurnoInput, setObservacionesTurnoInput] = useState<string>('');
-  const [isProcessingTurno, setIsProcessingTurno] = useState<boolean>(false);
-
-  useEffect(() => {
-    const unsub = turnosCajaService.subscribeToTurnos((items) => {
-      setTurnos(items);
-    });
-    return () => unsub();
-  }, []);
-
-  const activeTurno = useMemo(() => {
-    return turnos.find((t) => t.estado === 'abierto') || null;
-  }, [turnos]);
-
-  // Cálculos para el turno activo y cierre de caja
-  const ventasActivasTurno = useMemo(() => {
-    if (!activeTurno) return [];
-    return ventas.filter(
-      (v) =>
-        !v.anulada &&
-        (v.turnoId === activeTurno.id ||
-          (!v.turnoId &&
-            v.vendedor === activeTurno.cajero &&
-            (v.createdAt || v.fecha) >= activeTurno.createdAt))
-    );
-  }, [ventas, activeTurno]);
-
-  const totalVentasTurnoActivo = useMemo(() => {
-    return ventasActivasTurno.reduce((acc, v) => acc + (Number(v.total) || 0), 0);
-  }, [ventasActivasTurno]);
-
-  const totalEsperadoEnCaja = useMemo(() => {
-    if (!activeTurno) return 0;
-    return (Number(activeTurno.montoInicial) || 0) + totalVentasTurnoActivo;
-  }, [activeTurno, totalVentasTurnoActivo]);
-
-  const diferenciaCierreCalculada = useMemo(() => {
-    const finalNum = Number(montoFinalTurnoInput);
-    if (isNaN(finalNum) || montoFinalTurnoInput.trim() === '') return null;
-    return finalNum - totalEsperadoEnCaja;
-  }, [montoFinalTurnoInput, totalEsperadoEnCaja]);
-
-  const handleAbrirTurno = async () => {
-    if (isProcessingTurno) return;
-    const nombre = cajeroTurnoInput.trim() || activeCajero;
-    const fondo = Number(montoInicialTurnoInput);
-    if (isNaN(fondo) || fondo < 0) {
-      alert('Por favor introduce un monto de fondo inicial válido.');
-      return;
-    }
-    setIsProcessingTurno(true);
-    try {
-      const nuevo = await turnosCajaService.abrirTurno({
-        cajero: nombre,
-        montoInicial: fondo,
-        cajeroEmail: user.email || '',
-        cajeroUid: user.uid || '',
-        observaciones: observacionesTurnoInput.trim(),
-      });
-      setActiveCajero(nuevo.cajero);
-      authService.updateCajeroJornada(nuevo.cajero);
-      setIsTurnoModalOpen(false);
-      setSaleSuccessMessage(`¡Turno de caja abierto correctamente con ${formatCurrency(nuevo.montoInicial)} de fondo!`);
-      setTimeout(() => setSaleSuccessMessage(null), 5000);
-    } catch (err: any) {
-      alert('Error al abrir turno en Firebase: ' + err.message);
-    } finally {
-      setIsProcessingTurno(false);
-    }
-  };
-
-  const handleCerrarTurno = async () => {
-    if (!activeTurno?.id || isProcessingTurno) return;
-    const finalNum = Number(montoFinalTurnoInput);
-    if (isNaN(finalNum) || finalNum < 0) {
-      alert('Por favor ingresa el monto total de dinero contado en caja.');
-      return;
-    }
-    setIsProcessingTurno(true);
-    try {
-      await turnosCajaService.cerrarTurno(activeTurno.id, {
-        montoFinal: finalNum,
-        totalVentas: totalVentasTurnoActivo,
-        observaciones: observacionesTurnoInput.trim(),
-      });
-      setIsTurnoModalOpen(false);
-      setSaleSuccessMessage(`¡Turno de caja cerrado y persistido en Firebase exitosamente!`);
-      setTimeout(() => setSaleSuccessMessage(null), 5000);
-    } catch (err: any) {
-      alert('Error al cerrar turno en Firebase: ' + err.message);
-    } finally {
-      setIsProcessingTurno(false);
-    }
-  };
-
-  // Active cashier for current shift
+  // Active cashier
   const [activeCajero, setActiveCajero] = useState<string>(
-    user.cajeroJornada || user.displayName || (user.email ? user.email.split('@')[0] : 'Cajero de Turno')
+    user.cajeroJornada || user.displayName || (user.email ? user.email.split('@')[0] : 'Cajero')
   );
   const [isShiftModalOpen, setIsShiftModalOpen] = useState<boolean>(false);
   const [shiftNameInput, setShiftNameInput] = useState<string>('');
@@ -310,8 +205,7 @@ export const VentasView: React.FC<VentasViewProps> = ({
         montoRecibido: metodoPago === 'Efectivo' ? recibidoNum : total,
         cambio: metodoPago === 'Efectivo' ? cambio : 0,
         notas: notasVenta.trim(),
-        vendedor: activeTurno?.cajero || activeCajero || user.displayName || user.email || 'Cajero',
-        turnoId: activeTurno?.id || '',
+        vendedor: activeCajero || user.displayName || user.email || 'Cajero',
         fecha: new Date().toISOString(),
       });
 
@@ -472,20 +366,6 @@ export const VentasView: React.FC<VentasViewProps> = ({
             <BarChart3 className="w-3.5 h-3.5 text-pink-600" />
             <span>Resúmenes de Venta</span>
           </button>
-          <button
-            onClick={() => setActiveSubTab('turnos')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSubTab === 'turnos'
-                ? 'bg-white text-pink-700 shadow-sm'
-                : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5 text-pink-600" />
-            <span>Turnos de Caja ({turnos.length})</span>
-            {activeTurno && (
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Turno Activo" />
-            )}
-          </button>
         </div>
       </div>
 
@@ -536,67 +416,36 @@ export const VentasView: React.FC<VentasViewProps> = ({
       {/* POS VIEW (SOLO CAJERO) */}
       {activeSubTab === 'pos' && !isAdmin && (
         <div className="space-y-4">
-          {/* Active Cashier Shift Banner */}
+          {/* Active Cashier Banner */}
           <div className="p-4 rounded-2xl bg-white border border-stone-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className={`p-2.5 rounded-xl ${activeTurno ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                {activeTurno ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+              <div className="p-2.5 rounded-xl bg-pink-100 text-pink-700">
+                <User className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-serif font-bold text-sm text-stone-900">
-                    {activeTurno ? `Turno Activo: ${activeTurno.cajero}` : 'Terminal sin Turno de Caja Abierto'}
+                    Cajero: {activeCajero}
                   </span>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    activeTurno ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {activeTurno ? 'Abierto en Firebase' : 'Pendiente Apertura'}
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                    Terminal Habilitada
                   </span>
                 </div>
                 <p className="text-[11px] text-stone-500 mt-0.5">
-                  {activeTurno
-                    ? `Fondo inicial: ${formatCurrency(activeTurno.montoInicial)} · Abierto a las ${activeTurno.horaApertura || ''}`
-                    : 'Abre un turno para registrar el fondo inicial de caja y vincular todas las ventas en Firebase.'}
+                  Cobro directo en caja sin requerir apertura ni cierre de turnos.
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {activeTurno ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTurnoModalAction('cerrar');
-                    setMontoFinalTurnoInput('');
-                    setObservacionesTurnoInput('');
-                    setIsTurnoModalOpen(true);
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Lock className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Cerrar Turno</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTurnoModalAction('abrir');
-                    setCajeroTurnoInput(activeCajero);
-                    setMontoInicialTurnoInput('50.00');
-                    setObservacionesTurnoInput('');
-                    setIsTurnoModalOpen(true);
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Unlock className="w-3.5 h-3.5" />
-                  <span>Abrir Turno de Caja</span>
-                </button>
-              )}
               <button
                 type="button"
-                onClick={() => setActiveSubTab('turnos')}
-                className="px-3 py-1.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-xs font-semibold cursor-pointer"
+                onClick={() => {
+                  setShiftNameInput(activeCajero);
+                  setIsShiftModalOpen(true);
+                }}
+                className="px-3.5 py-1.5 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-xs font-semibold cursor-pointer"
               >
-                Historial de Turnos
+                Cambiar Cajero
               </button>
 
               {onNavigateTab && (
@@ -1206,220 +1055,6 @@ export const VentasView: React.FC<VentasViewProps> = ({
         />
       )}
 
-      {/* GESTIÓN DE TURNOS DE CAJA (turnos_caja en Firestore) */}
-      {activeSubTab === 'turnos' && (
-        <div className="space-y-6">
-          {/* Header & Quick Action Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Active Turno Card */}
-            <div className={`p-5 rounded-2xl border ${activeTurno ? 'bg-emerald-50/70 border-emerald-200' : 'bg-stone-50 border-stone-200'} flex flex-col justify-between`}>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-stone-500">
-                    Estado de Terminal
-                  </span>
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                    activeTurno ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-700'
-                  }`}>
-                    {activeTurno ? (
-                      <>
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        Turno Abierto
-                      </>
-                    ) : (
-                      'Sin Turno Abierto'
-                    )}
-                  </span>
-                </div>
-                <h3 className="font-serif font-bold text-stone-900 text-lg">
-                  {activeTurno ? activeTurno.cajero : 'Caja Cerrada'}
-                </h3>
-                <p className="text-xs text-stone-600 mt-1">
-                  {activeTurno
-                    ? `Apertura: ${activeTurno.fechaApertura} a las ${activeTurno.horaApertura}`
-                    : 'No hay turno activo actualmente en la terminal.'}
-                </p>
-              </div>
-
-              {activeTurno && (
-                <div className="mt-4 pt-3 border-t border-emerald-200/60 flex items-center justify-between text-xs">
-                  <span className="text-stone-600">Fondo Inicial:</span>
-                  <span className="font-bold text-stone-900">{formatCurrency(activeTurno.montoInicial)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Shift Sales Stat Card */}
-            <div className="p-5 rounded-2xl bg-white border border-stone-200 flex flex-col justify-between">
-              <div>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-stone-500 block mb-2">
-                  Ventas del Turno Activo
-                </span>
-                {activeTurno ? (
-                  <>
-                    <h3 className="font-serif font-bold text-2xl text-stone-900">
-                      {formatCurrency(
-                        ventas
-                          .filter((v) => !v.anulada && (v.turnoId === activeTurno.id || (!v.turnoId && v.vendedor === activeTurno.cajero && (v.createdAt || v.fecha) >= activeTurno.createdAt)))
-                          .reduce((acc, v) => acc + (Number(v.total) || 0), 0)
-                      )}
-                    </h3>
-                    <p className="text-xs text-stone-500 mt-1">
-                      {ventas.filter((v) => !v.anulada && (v.turnoId === activeTurno.id || (!v.turnoId && v.vendedor === activeTurno.cajero && (v.createdAt || v.fecha) >= activeTurno.createdAt))).length} tickets emitidos
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-xs text-stone-400 mt-2">Abre un turno para computar ventas activas.</p>
-                )}
-              </div>
-              <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between text-xs">
-                <span className="text-stone-600">Total Histórico de Turnos:</span>
-                <span className="font-bold text-stone-900">{turnos.length}</span>
-              </div>
-            </div>
-
-            {/* Actions Card */}
-            <div className="p-5 rounded-2xl bg-stone-900 text-white flex flex-col justify-between">
-              <div>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-stone-400 block mb-2">
-                  Control de Caja en Firestore
-                </span>
-                <p className="text-xs text-stone-300">
-                  Apertura y cierre sincronizados en tiempo real en la colección <code className="text-amber-400 font-mono">turnos_caja</code>.
-                </p>
-              </div>
-
-              <div className="mt-4 pt-3 flex gap-2">
-                {activeTurno ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTurnoModalAction('cerrar');
-                      setMontoFinalTurnoInput('');
-                      setObservacionesTurnoInput('');
-                      setIsTurnoModalOpen(true);
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
-                  >
-                    <Lock className="w-4 h-4" />
-                    <span>Cerrar Turno de Caja</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTurnoModalAction('abrir');
-                      setCajeroTurnoInput(activeCajero);
-                      setMontoInicialTurnoInput('50.00');
-                      setObservacionesTurnoInput('');
-                      setIsTurnoModalOpen(true);
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
-                  >
-                    <Unlock className="w-4 h-4" />
-                    <span>Abrir Turno de Caja</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Turnos History Table */}
-          <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs">
-            <div className="p-4 border-b border-stone-100 flex items-center justify-between">
-              <div>
-                <h4 className="font-serif font-bold text-stone-900 text-base">Historial de Turnos de Caja</h4>
-                <p className="text-xs text-stone-500">Registros de jornadas auditadas en Firestore</p>
-              </div>
-              <span className="text-xs font-mono text-stone-400">{turnos.length} turnos</span>
-            </div>
-
-            {turnos.length === 0 ? (
-              <div className="py-12 text-center text-stone-400 text-xs">
-                No hay turnos registrados en Firestore.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-stone-200 bg-stone-50 text-[10px] uppercase font-bold text-stone-500 tracking-wider">
-                      <th className="p-3.5">Estado</th>
-                      <th className="p-3.5">Cajero</th>
-                      <th className="p-3.5">Apertura</th>
-                      <th className="p-3.5 text-right">Fondo Inicial</th>
-                      <th className="p-3.5">Cierre</th>
-                      <th className="p-3.5 text-right">Ventas</th>
-                      <th className="p-3.5 text-right">Monto Final</th>
-                      <th className="p-3.5 text-right">Diferencia</th>
-                      <th className="p-3.5">Notas</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100">
-                    {turnos.map((t) => {
-                      const isOpen = t.estado === 'abierto';
-                      const diff = t.diferencia ?? 0;
-                      return (
-                        <tr key={t.id || t.createdAt} className="hover:bg-stone-50/80 transition-colors">
-                          <td className="p-3.5">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-100 text-stone-600'
-                            }`}>
-                              {isOpen ? 'Abierto' : 'Cerrado'}
-                            </span>
-                          </td>
-                          <td className="p-3.5 font-bold text-stone-900">{t.cajero}</td>
-                          <td className="p-3.5 text-stone-600">
-                            <div>{t.fechaApertura}</div>
-                            <div className="text-[10px] text-stone-400">{t.horaApertura}</div>
-                          </td>
-                          <td className="p-3.5 text-right font-medium text-stone-700">
-                            {formatCurrency(t.montoInicial)}
-                          </td>
-                          <td className="p-3.5 text-stone-600">
-                            {t.fechaCierre ? (
-                              <>
-                                <div>{t.fechaCierre}</div>
-                                <div className="text-[10px] text-stone-400">{t.horaCierre || ''}</div>
-                              </>
-                            ) : (
-                              <span className="text-stone-400 italic">En curso</span>
-                            )}
-                          </td>
-                          <td className="p-3.5 text-right font-bold text-stone-900">
-                            {t.totalVentas !== undefined ? formatCurrency(t.totalVentas) : '-'}
-                          </td>
-                          <td className="p-3.5 text-right font-bold text-stone-900">
-                            {t.montoFinal !== undefined ? formatCurrency(t.montoFinal) : '-'}
-                          </td>
-                          <td className="p-3.5 text-right">
-                            {t.montoFinal !== undefined ? (
-                              <span className={`font-bold ${
-                                diff === 0
-                                  ? 'text-emerald-700'
-                                  : diff > 0
-                                  ? 'text-blue-700'
-                                  : 'text-rose-700'
-                              }`}>
-                                {diff > 0 ? `+${formatCurrency(diff)}` : formatCurrency(diff)}
-                              </span>
-                            ) : (
-                              '-'
-                            )}
-                          </td>
-                          <td className="p-3.5 text-stone-500 max-w-xs truncate" title={t.observaciones || ''}>
-                            {t.observaciones || '-'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Modal Eliminar Venta Individual con Código de Seguridad 0000 */}
       {ventaToDelete && (
         <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -1651,7 +1286,7 @@ export const VentasView: React.FC<VentasViewProps> = ({
               <p className="text-[11px] text-pink-700 font-semibold italic">{config?.eslogan || 'Repostería para todos tus eventos!!'}</p>
               <p className="text-[10px] text-stone-500">{config?.direccion || 'Calle 2 ave. Bolívar, PH Bahía Limón, Colón'}</p>
               <p className="text-[10px] text-stone-500 font-medium mt-1">
-                Cajero en turno: <strong>{selectedVentaTicket.vendedor || activeCajero}</strong>
+                Cajero: <strong>{selectedVentaTicket.vendedor || activeCajero}</strong>
               </p>
               <p className="text-[10px] text-stone-400 mt-0.5">Ticket #{selectedVentaTicket.id?.slice(-8)}</p>
               <p className="text-[10px] text-stone-400">
@@ -1808,220 +1443,6 @@ export const VentasView: React.FC<VentasViewProps> = ({
                 Cancelar
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Abrir / Cerrar Turno de Caja (turnos_caja) */}
-      {isTurnoModalOpen && (
-        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
-              <div className="flex items-center gap-2.5">
-                <div className={`p-2 rounded-xl ${turnoModalAction === 'abrir' ? 'bg-pink-100 text-pink-700' : 'bg-amber-100 text-amber-700'}`}>
-                  {turnoModalAction === 'abrir' ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
-                </div>
-                <div>
-                  <h3 className="font-serif font-bold text-stone-900 text-base">
-                    {turnoModalAction === 'abrir' ? 'Apertura de Turno de Caja' : 'Cierre y Arqueo de Caja'}
-                  </h3>
-                  <span className="text-[11px] text-stone-500">
-                    {turnoModalAction === 'abrir' ? 'Registro en colección turnos_caja' : `Turno de ${activeTurno?.cajero || 'Caja'}`}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsTurnoModalOpen(false)}
-                className="text-stone-400 hover:text-stone-600 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {turnoModalAction === 'abrir' ? (
-              <div className="space-y-4 text-xs">
-                {/* Cajero */}
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">
-                    Cajero Responsable
-                  </label>
-                  <input
-                    type="text"
-                    value={cajeroTurnoInput}
-                    onChange={(e) => setCajeroTurnoInput(e.target.value)}
-                    placeholder="Nombre del cajero"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                  />
-                  {config?.cajerosPredefinidos && config.cajerosPredefinidos.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {config.cajerosPredefinidos.map((name) => (
-                        <button
-                          key={name}
-                          type="button"
-                          onClick={() => setCajeroTurnoInput(name)}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
-                            cajeroTurnoInput === name
-                              ? 'bg-pink-600 text-white border-pink-600'
-                              : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
-                          }`}
-                        >
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Fondo Inicial */}
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">
-                    Fondo Inicial de Caja en Efectivo ($)
-                  </label>
-                  <div className="relative">
-                    <DollarSign className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={montoInicialTurnoInput}
-                      onChange={(e) => setMontoInicialTurnoInput(e.target.value)}
-                      placeholder="50.00"
-                      className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-stone-300 bg-stone-50 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                    />
-                  </div>
-                  <p className="text-[10px] text-stone-400 mt-1">Monto base en billetes y monedas para dar cambio.</p>
-                </div>
-
-                {/* Observaciones */}
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">
-                    Observaciones (opcional)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={observacionesTurnoInput}
-                    onChange={(e) => setObservacionesTurnoInput(e.target.value)}
-                    placeholder="Notas o estado de la gaveta de dinero..."
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                  />
-                </div>
-
-                <div className="pt-2 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={isProcessingTurno}
-                    onClick={handleAbrirTurno}
-                    className="flex-1 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-                  >
-                    <Unlock className="w-4 h-4" />
-                    <span>{isProcessingTurno ? 'Guardando...' : 'Abrir Turno en Firebase'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsTurnoModalOpen(false)}
-                    className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-700 text-xs font-semibold hover:bg-stone-50 cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4 text-xs">
-                {/* Resumen del Turno */}
-                <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-stone-500">Cajero en turno:</span>
-                    <span className="font-bold text-stone-900">{activeTurno?.cajero}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-stone-500">Fondo inicial recibido:</span>
-                    <span className="font-bold text-stone-900">{formatCurrency(activeTurno?.montoInicial || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-stone-500">Total ventas registradas:</span>
-                    <span className="font-bold text-stone-900">{formatCurrency(totalVentasTurnoActivo)}</span>
-                  </div>
-                  <div className="pt-2 border-t border-stone-200 flex justify-between font-bold text-stone-900">
-                    <span>Total esperado en gaveta:</span>
-                    <span className="font-serif text-sm text-pink-700">{formatCurrency(totalEsperadoEnCaja)}</span>
-                  </div>
-                </div>
-
-                {/* Dinero Contado al Cierre */}
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">
-                    Dinero Total Contado en Gaveta ($)
-                  </label>
-                  <div className="relative">
-                    <DollarSign className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={montoFinalTurnoInput}
-                      onChange={(e) => setMontoFinalTurnoInput(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-stone-300 bg-stone-50 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Diferencia calculada */}
-                {diferenciaCierreCalculada !== null && (
-                  <div className={`p-3 rounded-xl border flex items-center justify-between text-xs font-bold ${
-                    diferenciaCierreCalculada === 0
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                      : diferenciaCierreCalculada > 0
-                      ? 'bg-blue-50 border-blue-200 text-blue-800'
-                      : 'bg-rose-50 border-rose-200 text-rose-800'
-                  }`}>
-                    <span>
-                      {diferenciaCierreCalculada === 0
-                        ? 'Caja cuadrada exacta'
-                        : diferenciaCierreCalculada > 0
-                        ? 'Sobrante en caja'
-                        : 'Faltante en caja'}
-                    </span>
-                    <span className="font-serif text-sm">
-                      {diferenciaCierreCalculada > 0 ? `+${formatCurrency(diferenciaCierreCalculada)}` : formatCurrency(diferenciaCierreCalculada)}
-                    </span>
-                  </div>
-                )}
-
-                {/* Observaciones */}
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">
-                    Observaciones de Cierre (opcional)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={observacionesTurnoInput}
-                    onChange={(e) => setObservacionesTurnoInput(e.target.value)}
-                    placeholder="Comentarios sobre el cuadre de caja o retiro de dinero..."
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 bg-stone-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"
-                  />
-                </div>
-
-                <div className="pt-2 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={isProcessingTurno}
-                    onClick={handleCerrarTurno}
-                    className="flex-1 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-                  >
-                    <Lock className="w-4 h-4 text-amber-300" />
-                    <span>{isProcessingTurno ? 'Guardando...' : 'Cerrar Turno en Firebase'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsTurnoModalOpen(false)}
-                    className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-700 text-xs font-semibold hover:bg-stone-50 cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}

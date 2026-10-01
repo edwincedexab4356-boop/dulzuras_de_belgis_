@@ -22,9 +22,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   const [cajeroEmail, setCajeroEmail] = useState(defaultEmail);
   const [cajeroPassword, setCajeroPassword] = useState('cajeroadmin');
   
-  // Shift staff selection (configured and saved by the administrator)
+  // Staff selection (configured and saved by the administrator)
   const predefinedStaff = config?.cajerosPredefinidos || [];
-  const [selectedStaff, setSelectedStaff] = useState<string>(() => predefinedStaff[0] || 'Cajero de Turno');
+  const [selectedStaff, setSelectedStaff] = useState<string>(() => predefinedStaff[0] || 'Cajero');
   const [customStaff, setCustomStaff] = useState<string>('');
   const [isCustomStaff, setIsCustomStaff] = useState<boolean>(() => predefinedStaff.length === 0);
 

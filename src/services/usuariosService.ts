@@ -54,7 +54,7 @@ const DEFAULT_USUARIOS: UsuarioDoc[] = [
     id: 'usr-cajero-2',
     uid: 'usr-cajero-2',
     email: 'edwincede.xab4356@gmail.com',
-    nombre: 'Cajero de Turno',
+    nombre: 'Cajero Principal',
     role: 'cajero',
     rol: 'cajero',
     activo: true,
