@@ -33,8 +33,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   )}`;
 
   const heroImg =
-    config.heroImagen ||
-    'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1000&q=85';
+    config.heroImagen &&
+    !config.heroImagen.includes('1570197788417') &&
+    !config.heroImagen.toLowerCase().includes('helado')
+      ? config.heroImagen
+      : 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1000&q=85';
 
   const brandName = config.nombre || "Dulzuras de Belgi's";
   const slogan = config.eslogan || 'Repostería para todos tus eventos!!';

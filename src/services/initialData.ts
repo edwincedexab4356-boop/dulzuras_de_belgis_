@@ -30,7 +30,7 @@ export const INITIAL_CONFIGURACION: ConfiguracionNegocio = {
     domingo: { activo: false, apertura: '09:00', cierre: '19:30' },
   },
   logoUrl: '/images/logo.png',
-  heroImagen: 'https://images.unsplash.com/photo-1570197788417-0e82375c9371?auto=format&fit=crop&w=800&q=85',
+  heroImagen: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1000&q=85',
   heroTitulo: 'El sabor artesanal que alegra tus mejores momentos',
   heroSubtitulo: 'En Dulzuras de Belgi\'s nos dedicamos a la alta repostería artesanal y dulcería fina, confeccionando creaciones selectas con ingredientes de primera calidad para todos tus eventos.',
   presentacionTexto: 'Somos una dulcería y repostería artesanal en Panamá. Elaboramos postres con recetas únicas, ingredientes frescos y entrega rápida.',

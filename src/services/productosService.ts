@@ -42,7 +42,7 @@ function normalizeProducto(id: string, data: any): Producto {
     imagen:
       data.imagen ||
       data.image ||
-      'https://images.unsplash.com/photo-1570197788417-0e82375c9371?auto=format&fit=crop&q=80&w=800',
+      'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&q=80&w=800',
     disponible: isDisp,
     activo: isDisp,
     stock: data.stock !== undefined ? Number(data.stock) : 0,
@@ -216,7 +216,7 @@ export const productosService = {
       categoria: producto.categoria?.trim() || 'Dulcería',
       imagen:
         producto.imagen?.trim() ||
-        'https://images.unsplash.com/photo-1570197788417-0e82375c9371?auto=format&fit=crop&w=600&q=80',
+        'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80',
       disponible: isDisp,
       activo: isDisp,
       stock: producto.stock !== undefined ? Number(producto.stock) : 0,

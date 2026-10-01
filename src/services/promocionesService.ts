@@ -57,30 +57,16 @@ function saveLocalPromociones(items: Promocion[]) {
   }
 }
 
-function mergePromociones(localList: Promocion[], remoteList: Promocion[]): Promocion[] {
-  const map = new Map<string, Promocion>();
-  for (const item of localList) {
-    if (item.id) map.set(item.id, item);
-  }
-  for (const item of remoteList) {
-    if (item.id) map.set(item.id, item);
-  }
-  const deletedIds = getDeletedPromoIds();
-  const merged = Array.from(map.values()).filter(
-    (p) => p.id && !deletedIds.has(p.id) && p.id !== 'promo-1' && p.id !== 'promo-2'
-  );
-  merged.sort((a, b) => (a.orden || 1) - (b.orden || 1));
-  return merged;
-}
-
 export const promocionesService = {
   subscribeToPromociones(callback: (items: Promocion[]) => void): () => void {
+    const deletedIds = getDeletedPromoIds();
     // 1. Initial local load
-    callback(getLocalPromociones());
+    callback(getLocalPromociones().filter((p) => !p.id || !deletedIds.has(p.id)));
 
     // 2. Local storage event listener
     const handleStorageOrLocal = () => {
-      callback(getLocalPromociones());
+      const curDeleted = getDeletedPromoIds();
+      callback(getLocalPromociones().filter((p) => !p.id || !curDeleted.has(p.id)));
     };
     window.addEventListener('storage', handleStorageOrLocal);
     window.addEventListener('delicias_promociones_changed', handleStorageOrLocal);
@@ -89,36 +75,46 @@ export const promocionesService = {
     let channel: any = null;
     const client = getSupabaseClient();
     if (client && isSupabaseConfigured()) {
-      client
-        .from('promociones')
-        .select('*')
-        .order('orden', { ascending: true })
-        .then(({ data, error }) => {
+      const fetchAndSync = async () => {
+        try {
+          const { data, error } = await client
+            .from('promociones')
+            .select('*')
+            .order('orden', { ascending: true });
           if (!error && Array.isArray(data)) {
-            const mapped: Promocion[] = data.map((d: any) => ({
-              id: d.id,
-              titulo: d.titulo || '',
-              subtitulo: d.subtitulo || '',
-              descripcion: d.descripcion || '',
-              descuentoPorcentaje: Number(d.descuento_porcentaje || 0),
-              precioOferta: Number(d.precio_oferta || 0),
-              precioRegular: Number(d.precio_regular || 0),
-              etiqueta: d.etiqueta || 'OFERTA ESPECIAL',
-              imagen: d.imagen || '',
-              productoId: d.producto_id || '',
-              activa: d.activa !== false,
-              mostrarModalInicio: d.mostrar_modal_inicio !== false,
-              fechaInicio: d.fecha_inicio || '',
-              fechaFin: d.fecha_fin || '',
-              orden: Number(d.orden || 1),
-              createdAt: d.created_at,
-              updatedAt: d.updated_at,
-            }));
-            const merged = mergePromociones(getLocalPromociones(), mapped);
-            saveLocalPromociones(merged);
-            callback(merged);
+            const currentDeleted = getDeletedPromoIds();
+            const list: Promocion[] = data
+              .map((d: any) => ({
+                id: d.id,
+                titulo: d.titulo || '',
+                subtitulo: d.subtitulo || '',
+                descripcion: d.descripcion || '',
+                descuentoPorcentaje: Number(d.descuento_porcentaje || 0),
+                precioOferta: Number(d.precio_oferta || 0),
+                precioRegular: Number(d.precio_regular || 0),
+                etiqueta: d.etiqueta || 'OFERTA ESPECIAL',
+                imagen: d.imagen || '',
+                productoId: d.producto_id || '',
+                activa: d.activa !== false,
+                mostrarModalInicio: d.mostrar_modal_inicio !== false,
+                fechaInicio: d.fecha_inicio || '',
+                fechaFin: d.fecha_fin || '',
+                orden: Number(d.orden || 1),
+                createdAt: d.created_at,
+                updatedAt: d.updated_at,
+              }))
+              .filter(
+                (p) => !currentDeleted.has(p.id) && p.id !== 'promo-1' && p.id !== 'promo-2'
+              );
+            saveLocalPromociones(list);
+            callback(list);
           }
-        });
+        } catch (e) {
+          console.warn('Error fetching promociones from Supabase:', e);
+        }
+      };
+
+      fetchAndSync();
 
       try {
         channel = client
@@ -126,35 +122,8 @@ export const promocionesService = {
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'promociones' },
-            async () => {
-              const { data, error } = await client
-                .from('promociones')
-                .select('*')
-                .order('orden', { ascending: true });
-              if (!error && Array.isArray(data)) {
-                const mapped: Promocion[] = data.map((d: any) => ({
-                  id: d.id,
-                  titulo: d.titulo || '',
-                  subtitulo: d.subtitulo || '',
-                  descripcion: d.descripcion || '',
-                  descuentoPorcentaje: Number(d.descuento_porcentaje || 0),
-                  precioOferta: Number(d.precio_oferta || 0),
-                  precioRegular: Number(d.precio_regular || 0),
-                  etiqueta: d.etiqueta || 'OFERTA ESPECIAL',
-                  imagen: d.imagen || '',
-                  productoId: d.producto_id || '',
-                  activa: d.activa !== false,
-                  mostrarModalInicio: d.mostrar_modal_inicio !== false,
-                  fechaInicio: d.fecha_inicio || '',
-                  fechaFin: d.fecha_fin || '',
-                  orden: Number(d.orden || 1),
-                  createdAt: d.created_at,
-                  updatedAt: d.updated_at,
-                }));
-                const merged = mergePromociones(getLocalPromociones(), mapped);
-                saveLocalPromociones(merged);
-                callback(merged);
-              }
+            () => {
+              fetchAndSync();
             }
           )
           .subscribe();
@@ -173,6 +142,7 @@ export const promocionesService = {
   },
 
   async getPromociones(): Promise<Promocion[]> {
+    const deletedIds = getDeletedPromoIds();
     const client = getSupabaseClient();
     if (client && isSupabaseConfigured()) {
       try {
@@ -180,32 +150,38 @@ export const promocionesService = {
           .from('promociones')
           .select('*')
           .order('orden', { ascending: true });
-        if (!error && data && data.length > 0) {
-          return data.map((d: any) => ({
-            id: d.id,
-            titulo: d.titulo || '',
-            subtitulo: d.subtitulo || '',
-            descripcion: d.descripcion || '',
-            descuentoPorcentaje: Number(d.descuento_porcentaje || 0),
-            precioOferta: Number(d.precio_oferta || 0),
-            precioRegular: Number(d.precio_regular || 0),
-            etiqueta: d.etiqueta || 'OFERTA',
-            imagen: d.imagen || '',
-            productoId: d.producto_id || '',
-            activa: d.activa !== false,
-            mostrarModalInicio: d.mostrar_modal_inicio !== false,
-            fechaInicio: d.fecha_inicio || '',
-            fechaFin: d.fecha_fin || '',
-            orden: Number(d.orden || 1),
-            createdAt: d.created_at,
-            updatedAt: d.updated_at,
-          }));
+        if (!error && Array.isArray(data)) {
+          const list = data
+            .map((d: any) => ({
+              id: d.id,
+              titulo: d.titulo || '',
+              subtitulo: d.subtitulo || '',
+              descripcion: d.descripcion || '',
+              descuentoPorcentaje: Number(d.descuento_porcentaje || 0),
+              precioOferta: Number(d.precio_oferta || 0),
+              precioRegular: Number(d.precio_regular || 0),
+              etiqueta: d.etiqueta || 'OFERTA',
+              imagen: d.imagen || '',
+              productoId: d.producto_id || '',
+              activa: d.activa !== false,
+              mostrarModalInicio: d.mostrar_modal_inicio !== false,
+              fechaInicio: d.fecha_inicio || '',
+              fechaFin: d.fecha_fin || '',
+              orden: Number(d.orden || 1),
+              createdAt: d.created_at,
+              updatedAt: d.updated_at,
+            }))
+            .filter((p) => !deletedIds.has(p.id) && p.id !== 'promo-1' && p.id !== 'promo-2');
+          saveLocalPromociones(list);
+          return list;
         }
       } catch (e) {
         console.warn('Error fetching promociones from Supabase:', e);
       }
     }
-    return getLocalPromociones();
+    return getLocalPromociones().filter(
+      (p) => (!p.id || !deletedIds.has(p.id)) && p.id !== 'promo-1' && p.id !== 'promo-2'
+    );
   },
 
   getLocalPromociones(): Promocion[] {

@@ -84,22 +84,29 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
 
     try {
       const isBaja = tipoOperacion === 'baja';
-      await produccionService.registrarProduccion({
-        productoId: prod.id || '',
-        producto: prod.nombre,
-        cantidad,
-        fecha: new Date().toISOString().split('T')[0],
-        lote: lote.trim() || undefined,
-        responsable: responsable.trim() || undefined,
-        observacion: observaciones.trim() || undefined,
-        esBaja: isBaja,
-        tipoOperacion,
-      });
+      await produccionService.registrarProduccion(
+        {
+          productoId: prod.id || '',
+          producto: prod.nombre,
+          cantidad,
+          fecha: new Date().toISOString().split('T')[0],
+          hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          lote: lote.trim() || undefined,
+          responsable: responsable.trim() || undefined,
+          notas: observaciones.trim() || (isBaja ? 'Baja / Merma' : 'Lote terminado'),
+          costoUnitario: prod.costo || 0.85,
+          costoTotal: (prod.costo || 0.85) * cantidad,
+          esBaja: isBaja,
+          tipoOperacion,
+        },
+        prod,
+        responsable
+      );
 
       if (isBaja) {
-        setSuccessMsg(`Baja de ${cantidad} unidades de "${prod.nombre}" registrada. Stock descontado en Firebase.`);
+        setSuccessMsg(`Baja de ${cantidad} unidades de "${prod.nombre}" registrada. Stock descontado del inventario.`);
       } else {
-        setSuccessMsg(`Lote de ${cantidad} unidades de "${prod.nombre}" registrado y sumado al stock en Firebase.`);
+        setSuccessMsg(`¡Lote de ${cantidad} unidades de "${prod.nombre}" registrado! Se sumó de una vez al inventario.`);
       }
       setIsModalOpen(false);
       onRefreshData?.();

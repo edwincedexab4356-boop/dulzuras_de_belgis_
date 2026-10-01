@@ -437,7 +437,7 @@ export const MenuSection: React.FC<MenuSectionProps> = ({
                   {/* Image container */}
                   <div className="relative h-48 sm:h-52 w-full overflow-hidden bg-stone-100">
                     <img
-                      src={prod.imagen || 'https://images.unsplash.com/photo-1570197788417-0e82375c9371?auto=format&fit=crop&w=600&q=80'}
+                      src={prod.imagen || 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80'}
                       alt={prod.nombre}
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"

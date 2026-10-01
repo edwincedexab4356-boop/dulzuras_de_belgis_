@@ -142,13 +142,29 @@ export const produccionService = {
     saveLocalProducciones(current);
 
     // 2. Adjust inventory automatically
-    if (producto) {
-      await inventarioService.registrarEntrada(
-        producto,
-        nueva.cantidad,
-        `Producción elaborada por ${usuario}: ${nueva.notas || 'Lote terminado'}`,
-        usuario
-      );
+    let targetProd = producto;
+    if (!targetProd && nueva.productoId) {
+      targetProd = productosService.getLocalProductos().find((p) => p.id === nueva.productoId);
+    }
+
+    if (targetProd) {
+      const isBaja =
+        (nueva as any).esBaja === true || (nueva as any).tipoOperacion === 'baja';
+      if (isBaja) {
+        await inventarioService.registrarSalida(
+          targetProd,
+          nueva.cantidad,
+          `Baja / Merma de producción registrada por ${usuario}: ${nueva.notas || 'Lote descartado'}`,
+          usuario
+        );
+      } else {
+        await inventarioService.registrarEntrada(
+          targetProd,
+          nueva.cantidad,
+          `Producción elaborada y añadida al inventario por ${usuario}: ${nueva.notas || 'Lote terminado'}`,
+          usuario
+        );
+      }
     }
 
     // 3. Supabase insert
@@ -186,13 +202,31 @@ export const produccionService = {
     usuario: string = 'Administrador'
   ): Promise<void> {
     // Revert inventory
-    if (producto) {
-      await inventarioService.registrarSalida(
-        producto,
-        produccion.cantidad,
-        `Reversión de producción eliminada (ID: ${produccion.id})`,
-        usuario
-      );
+    let targetProd = producto;
+    if (!targetProd && produccion.productoId) {
+      targetProd = productosService.getLocalProductos().find((p) => p.id === produccion.productoId);
+    }
+
+    if (targetProd) {
+      const isBaja =
+        (produccion as any).esBaja === true || (produccion as any).tipoOperacion === 'baja';
+      if (isBaja) {
+        // Reverting a baja means adding the units back
+        await inventarioService.registrarEntrada(
+          targetProd,
+          produccion.cantidad,
+          `Reversión de baja/merma eliminada por ${usuario} (ID: ${produccion.id})`,
+          usuario
+        );
+      } else {
+        // Reverting a normal production means deducting the produced units
+        await inventarioService.registrarSalida(
+          targetProd,
+          produccion.cantidad,
+          `Reversión de lote de producción eliminado por ${usuario} (ID: ${produccion.id})`,
+          usuario
+        );
+      }
     }
 
     const all = getLocalProducciones();

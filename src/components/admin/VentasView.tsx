@@ -529,7 +529,7 @@ export const VentasView: React.FC<VentasViewProps> = ({
                     <div>
                       <div className="aspect-square w-full rounded-xl overflow-hidden bg-stone-100 mb-2 relative">
                         <img
-                          src={prod.imagen || 'https://images.unsplash.com/photo-1570197788417-0e82375c9371?auto=format&fit=crop&w=300&q=80'}
+                          src={prod.imagen || 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=300&q=80'}
                           alt={prod.nombre}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         />
