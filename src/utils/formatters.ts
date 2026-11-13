@@ -61,6 +61,20 @@ export function getPanamaTimeHM(): string {
   return formatTimePanama(new Date());
 }
 
+/** Fecha YYYY-MM-DD de un momento dado, en la hora de Panamá (no en UTC). */
+export function toPanamaYMD(d: Date): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: PANAMA_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  } catch {
+    return d.toISOString().split('T')[0];
+  }
+}
+
 export function getPanamaTodayYMD(): string {
   try {
     const d = new Date();

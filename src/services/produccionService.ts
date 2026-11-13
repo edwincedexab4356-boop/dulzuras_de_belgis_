@@ -1,5 +1,6 @@
 import { ProduccionRegistro, Producto } from '../types';
 import { deduplicateById } from '../utils/deduplicate';
+import { toPanamaYMD } from '../utils/formatters';
 import { inventarioService } from './inventarioService';
 import { productosService } from './productosService';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
@@ -28,12 +29,16 @@ function normalizeProduccion(id: string, data: any): ProduccionRegistro {
     cantidad,
     costoUnitario,
     costoTotal,
-    fecha: data.fecha || new Date().toISOString().split('T')[0],
+    fecha: data.fecha || toPanamaYMD(new Date()),
     hora: data.hora || '12:00',
     responsable: data.responsable || 'Administrador',
     notas: data.notas || '',
+    // Estos datos no tienen columna propia: en Supabase van en la columna "extra"
+    lote: data.lote ?? data.extra?.lote ?? undefined,
+    esBaja: data.esBaja ?? data.extra?.esBaja ?? undefined,
+    tipoOperacion: data.tipoOperacion ?? data.extra?.tipoOperacion ?? undefined,
     createdAt: data.createdAt || data.created_at || new Date().toISOString(),
-  };
+  } as ProduccionRegistro;
 }
 
 function getLocalProducciones(): ProduccionRegistro[] {
@@ -183,6 +188,11 @@ export const produccionService = {
           hora: nueva.hora,
           responsable: nueva.responsable,
           notas: nueva.notas,
+          extra: {
+            lote: nueva.lote || null,
+            esBaja: (nueva as any).esBaja === true,
+            tipoOperacion: (nueva as any).tipoOperacion || 'produccion',
+          },
           created_at: nueva.createdAt,
         })
         .then(

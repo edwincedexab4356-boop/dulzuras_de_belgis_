@@ -35,7 +35,7 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
   const [selectedProductoId, setSelectedProductoId] = useState<string>('');
   const [cantidad, setCantidad] = useState<number>(12);
   const [tipoOperacion, setTipoOperacion] = useState<'produccion' | 'baja'>('produccion');
-  const [lote, setLote] = useState<string>(() => `LOTE-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}`);
+  const [lote, setLote] = useState<string>(() => `LOTE-${getPanamaTodayYMD().slice(2).replace(/-/g, '')}`);
   const [responsable, setResponsable] = useState<string>(user.displayName || user.email || 'Maestro Repostero');
   const [observaciones, setObservaciones] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
@@ -71,7 +71,7 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
     setSelectedProductoId(productos[0]?.id || '');
     setCantidad(12);
     setTipoOperacion(tipo);
-    setLote(`LOTE-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}`);
+    setLote(`LOTE-${getPanamaTodayYMD().slice(2).replace(/-/g, '')}`);
     setObservaciones('');
     setIsModalOpen(true);
   };
@@ -89,7 +89,7 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({
           productoId: prod.id || '',
           producto: prod.nombre,
           cantidad,
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: getPanamaTodayYMD(),
           hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           lote: lote.trim() || undefined,
           responsable: responsable.trim() || undefined,

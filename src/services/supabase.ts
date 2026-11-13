@@ -333,128 +333,115 @@ VALUES (
 )
 ON CONFLICT (id) DO UPDATE SET public = true;
 
--- Políticas para storage.objects (storage.objects ya tiene RLS activo en Supabase)
-DO $$
-BEGIN
-  BEGIN
-    DROP POLICY IF EXISTS "Lectura publica de imagenes" ON storage.objects;
-    CREATE POLICY "Lectura publica de imagenes" ON storage.objects FOR SELECT USING (bucket_id = 'imagenes');
-  EXCEPTION WHEN OTHERS THEN NULL;
-  END;
-
-  BEGIN
-    DROP POLICY IF EXISTS "Subida de imagenes admin" ON storage.objects;
-    CREATE POLICY "Subida de imagenes admin" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'imagenes');
-  EXCEPTION WHEN OTHERS THEN NULL;
-  END;
-
-  BEGIN
-    DROP POLICY IF EXISTS "Actualizacion de imagenes" ON storage.objects;
-    CREATE POLICY "Actualizacion de imagenes" ON storage.objects FOR UPDATE USING (bucket_id = 'imagenes') WITH CHECK (bucket_id = 'imagenes');
-  EXCEPTION WHEN OTHERS THEN NULL;
-  END;
-
-  BEGIN
-    DROP POLICY IF EXISTS "Eliminacion de imagenes" ON storage.objects;
-    CREATE POLICY "Eliminacion de imagenes" ON storage.objects FOR DELETE USING (bucket_id = 'imagenes');
-  EXCEPTION WHEN OTHERS THEN NULL;
-  END;
-END $$;
-
 -- ====================================================================
--- 10. ROW LEVEL SECURITY (RLS) PARA TABLAS
+-- SEGURIDAD (reglas de acceso)
+-- El público solo LEE productos, categorías, configuración y promociones.
+-- Ventas, inventario, producción y caja: solo personal con cuenta activa en "usuarios".
+-- Categorías, configuración, promociones y usuarios: solo administradores.
+-- Las cuentas se crean en Supabase > Authentication > Add user y se agregan en la tabla usuarios.
 -- ====================================================================
-ALTER TABLE public.configuracion ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.categorias ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.productos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ventas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.inventario_movimientos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.producciones ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.turnos_caja ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.promociones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.productos ADD COLUMN IF NOT EXISTS extra JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE public.producciones ADD COLUMN IF NOT EXISTS extra JSONB NOT NULL DEFAULT '{}'::jsonb;
 
-DROP POLICY IF EXISTS "acceso_total_configuracion" ON public.configuracion;
-CREATE POLICY "acceso_total_configuracion" ON public.configuracion FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "acceso_total_categorias" ON public.categorias;
-CREATE POLICY "acceso_total_categorias" ON public.categorias FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "acceso_total_productos" ON public.productos;
-CREATE POLICY "acceso_total_productos" ON public.productos FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "acceso_total_promociones" ON public.promociones;
-CREATE POLICY "acceso_total_promociones" ON public.promociones FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "acceso_total_ventas" ON public.ventas;
-CREATE POLICY "acceso_total_ventas" ON public.ventas FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "acceso_total_inventario" ON public.inventario_movimientos;
-CREATE POLICY "acceso_total_inventario" ON public.inventario_movimientos FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "acceso_total_producciones" ON public.producciones;
-CREATE POLICY "acceso_total_producciones" ON public.producciones FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "acceso_total_usuarios" ON public.usuarios;
-CREATE POLICY "acceso_total_usuarios" ON public.usuarios FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "acceso_total_turnos" ON public.turnos_caja;
-CREATE POLICY "acceso_total_turnos" ON public.turnos_caja FOR ALL USING (true) WITH CHECK (true);
-
--- Conceder permisos de lectura y escritura al rol anon y authenticated de Supabase
-GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
-
--- ====================================================================
--- 11. INICIALIZAR USUARIOS Y ROLES (ADMIN & CAJERO)
--- ====================================================================
 INSERT INTO public.usuarios (id, uid, email, nombre, role, rol, activo)
 VALUES
   ('usr-admin-1', 'usr-admin-1', 'edwinc3d3@gmail.com', 'Edwin Cedeño (Admin)', 'admin', 'admin', true),
   ('usr-cajero-1', 'usr-cajero-1', 'caja@dulzurasdebelgis.com', 'Cajero de Turno', 'cajero', 'cajero', true)
-ON CONFLICT (id) DO UPDATE SET
-  role = EXCLUDED.role,
-  rol = EXCLUDED.rol,
-  activo = EXCLUDED.activo;
+ON CONFLICT (id) DO NOTHING;
 
--- ====================================================================
--- 12. VINCULACIÓN AUTOMÁTICA CON AUTHENTICATION (TRIGGER)
--- Al agregar un usuario en Supabase Auth, se crea en public.usuarios automáticamente
--- ====================================================================
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public.usuarios (id, uid, email, nombre, role, rol, activo)
-  VALUES (
-    new.id,
-    new.id,
-    new.email,
-    COALESCE(new.raw_user_meta_data->>'nombre', new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
-    COALESCE(new.raw_user_meta_data->>'role', new.raw_user_meta_data->>'rol', 'cajero'),
-    COALESCE(new.raw_user_meta_data->>'role', new.raw_user_meta_data->>'rol', 'cajero'),
-    true
-  )
-  ON CONFLICT (id) DO UPDATE SET
-    email = EXCLUDED.email;
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- 5) Quién es personal del negocio
+create or replace function public.es_personal() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.usuarios where id = auth.uid()::text and activo is not false);
+$$;
 
-DO $$
-BEGIN
-  BEGIN
-    DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-    CREATE TRIGGER on_auth_user_created
-      AFTER INSERT ON auth.users
-      FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-  EXCEPTION WHEN OTHERS THEN
-    NULL;
-  END;
-END $$;
+create or replace function public.es_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.usuarios where id = auth.uid()::text and activo is not false and coalesce(role, rol) = 'admin');
+$$;
+
+-- Vincula al usuario que el administrador creó con su correo, solo si el correo está confirmado.
+create or replace function public.vincular_mi_usuario() returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  me text := auth.uid()::text;
+  mail text;
+  pre public.usuarios%rowtype;
+begin
+  if me is null then return null; end if;
+  select * into pre from public.usuarios where id = me;
+  if found then return json_build_object('role', coalesce(pre.role, pre.rol), 'activo', pre.activo is not false); end if;
+  select lower(email) into mail from auth.users where id = auth.uid() and email_confirmed_at is not null;
+  if mail is null then return null; end if;
+  select * into pre from public.usuarios where lower(email) = mail order by fecha_creacion limit 1;
+  if not found then return null; end if;
+  delete from public.usuarios where id = pre.id;
+  insert into public.usuarios (id, uid, email, nombre, role, rol, activo, fecha_creacion, extra)
+  values (me, me, mail, pre.nombre, coalesce(pre.role, pre.rol, 'caja'), coalesce(pre.role, pre.rol, 'caja'), pre.activo, pre.fecha_creacion, coalesce(pre.extra, '{}'::jsonb));
+  return json_build_object('role', coalesce(pre.role, pre.rol, 'caja'), 'activo', pre.activo is not false);
+end $$;
+
+revoke all on function public.vincular_mi_usuario() from public, anon;
+grant execute on function public.vincular_mi_usuario() to authenticated;
+
+-- El registro automático daba acceso a cualquiera que se creara una cuenta (y dejaba elegir el rol).
+drop trigger if exists on_auth_user_created on auth.users;
+drop function if exists public.handle_new_user();
+
+-- 6) Reglas de acceso (antes: cualquiera podía leer y borrar todo)
+do $$
+declare r record;
+begin
+  for r in select tablename, policyname from pg_policies where schemaname = 'public' loop
+    execute format('drop policy %I on public.%I', r.policyname, r.tablename);
+  end loop;
+  for r in select tablename from pg_tables where schemaname = 'public' loop
+    execute format('alter table public.%I enable row level security', r.tablename);
+  end loop;
+end $$;
+
+-- Lo que ve el público en la tienda
+create policy lectura_publica on public.productos for select using (true);
+create policy lectura_publica on public.categorias for select using (true);
+create policy lectura_publica on public.configuracion for select using (true);
+create policy lectura_publica on public.promociones for select using (true);
+
+-- Productos: la caja descuenta stock al vender; crear y borrar solo el administrador
+create policy personal_edita on public.productos for update using (public.es_personal()) with check (public.es_personal());
+create policy personal_crea on public.productos for insert with check (public.es_personal());
+create policy admin_borra on public.productos for delete using (public.es_admin());
+
+create policy admin_escribe on public.categorias for all using (public.es_admin()) with check (public.es_admin());
+create policy admin_escribe on public.configuracion for all using (public.es_admin()) with check (public.es_admin());
+create policy admin_escribe on public.promociones for all using (public.es_admin()) with check (public.es_admin());
+
+-- Operación diaria: solo personal activo
+create policy personal_lee on public.ventas for select using (public.es_personal());
+create policy personal_crea on public.ventas for insert with check (public.es_personal());
+create policy personal_edita on public.ventas for update using (public.es_personal()) with check (public.es_personal());
+create policy admin_borra on public.ventas for delete using (public.es_admin());
+
+create policy personal_todo on public.inventario_movimientos for all using (public.es_personal()) with check (public.es_personal());
+create policy personal_todo on public.producciones for all using (public.es_personal()) with check (public.es_personal());
+create policy personal_todo on public.turnos_caja for all using (public.es_personal()) with check (public.es_personal());
+create policy personal_todo on public.pedidos for all using (public.es_personal()) with check (public.es_personal());
+create policy personal_todo on public.clientes for all using (public.es_personal()) with check (public.es_personal());
+
+-- Usuarios: cada quien ve su propio registro; el administrador los maneja todos
+create policy ver_mi_usuario on public.usuarios for select using (id = auth.uid()::text or public.es_admin());
+create policy admin_escribe on public.usuarios for all using (public.es_admin()) with check (public.es_admin());
+
+-- 7) Fotos: todos las ven; solo el personal sube, cambia o borra
+drop policy if exists "Subida de imagenes admin" on storage.objects;
+drop policy if exists "Actualizacion de imagenes" on storage.objects;
+drop policy if exists "Eliminacion de imagenes" on storage.objects;
+drop policy if exists "Subida de imagenes personal" on storage.objects;
+drop policy if exists "Actualizacion de imagenes personal" on storage.objects;
+drop policy if exists "Eliminacion de imagenes personal" on storage.objects;
+create policy "Subida de imagenes personal" on storage.objects for insert with check (bucket_id = 'imagenes' and public.es_personal());
+create policy "Actualizacion de imagenes personal" on storage.objects for update using (bucket_id = 'imagenes' and public.es_personal()) with check (bucket_id = 'imagenes' and public.es_personal());
+create policy "Eliminacion de imagenes personal" on storage.objects for delete using (bucket_id = 'imagenes' and public.es_personal());
+
 
 -- ====================================================================
 -- 13. REALTIME (Sincronización en Vivo)

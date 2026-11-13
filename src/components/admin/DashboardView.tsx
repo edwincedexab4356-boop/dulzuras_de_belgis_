@@ -20,7 +20,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { Venta, Producto, ProduccionRegistro, AdminTab } from '../../types';
-import { getPanamaTodayYMD } from '../../utils/formatters';
+import { getPanamaTodayYMD, toPanamaYMD } from '../../utils/formatters';
 
 interface DashboardViewProps {
   ventas: Venta[];
@@ -182,7 +182,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     for (let i = temporalDays - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(now.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = toPanamaYMD(d);
       const dayName = d.toLocaleDateString('es-ES', { weekday: 'short' });
       const dayNum = d.getDate();
       const label = `${dayName} ${dayNum}`;
