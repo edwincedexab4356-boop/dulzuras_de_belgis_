@@ -177,49 +177,28 @@ export const usuariosService = {
     return getLocalUsuarios();
   },
 
-  async getUserRole(uid: string, email?: string | null, displayName?: string | null): Promise<UserRole> {
-    const cleanEmail = (email || '').trim().toLowerCase();
+  /**
+   * Rol del usuario que inicia sesión, leído de la tabla "usuarios".
+   * Si el administrador lo agregó solo con su correo, la base lo vincula a su cuenta
+   * (función vincular_mi_usuario, solo con correo confirmado). Sin registro: SIN_ACCESO.
+   */
+  async getUserRole(uid: string, _email?: string | null, _displayName?: string | null): Promise<UserRole> {
+    const client = getSupabaseClient();
+    if (!client || !isSupabaseConfigured()) throw new Error('SIN_ACCESO');
 
-    const list = await this.getUsuarios();
-    const found = list.find(
-      (u) => (u.uid && u.uid === uid) || (cleanEmail && u.email.toLowerCase() === cleanEmail)
-    );
+    const { data: row, error } = await client.from('usuarios').select('role, rol, activo').eq('id', uid).maybeSingle();
+    if (error) throw new Error(error.message);
+    let found: { role?: string; rol?: string; activo?: boolean } | null = row;
 
-    if (found) {
-      if (found.activo === false) {
-        throw new Error('USUARIO_DESACTIVADO');
-      }
-      return normalizeRole(found.role || found.rol);
+    if (!found) {
+      const { data: vinculado, error: rpcError } = await client.rpc('vincular_mi_usuario');
+      if (rpcError) throw new Error(rpcError.message);
+      found = vinculado;
     }
 
-    if (cleanEmail === 'edwinc3d3@gmail.com' || cleanEmail === 'pedro76porro@gmail.com') {
-      return 'admin';
-    }
-
-    const assignedRole: UserRole = 'cajero';
-
-    if (cleanEmail) {
-      const client = getSupabaseClient();
-      if (client && isSupabaseConfigured()) {
-        client
-          .from('usuarios')
-          .upsert({
-            id: uid || 'usr-' + cleanEmail.replace(/[^a-zA-Z0-9]/g, '_'),
-            uid: uid || 'usr-' + cleanEmail.replace(/[^a-zA-Z0-9]/g, '_'),
-            email: cleanEmail,
-            nombre: displayName || cleanEmail.split('@')[0],
-            role: assignedRole,
-            rol: assignedRole,
-            activo: true,
-          })
-          .then(
-            () => {},
-            (e: any) => console.warn('Auto-create usuario error:', e)
-          );
-      }
-    }
-
-    return assignedRole;
+    if (!found) throw new Error('SIN_ACCESO');
+    if (found.activo === false) throw new Error('USUARIO_DESACTIVADO');
+    return normalizeRole(found.role || found.rol);
   },
 
   async setUsuarioRole(id: string, role: UserRole): Promise<void> {

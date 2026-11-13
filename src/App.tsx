@@ -270,6 +270,7 @@ export default function App() {
         <AdminLogin
           onLoginSuccess={handleLoginSuccess}
           onBackToPublic={handleBackToPublic}
+          config={config}
         />
       )}
 

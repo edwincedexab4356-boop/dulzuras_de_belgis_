@@ -17,10 +17,10 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'cajero' | 'admin'>('cajero');
 
-  // Pre-configured email and passwords
-  const defaultEmail = 'edwinc3d3@gmail.com';
-  const [cajeroEmail, setCajeroEmail] = useState(defaultEmail);
-  const [cajeroPassword, setCajeroPassword] = useState('cajeroadmin');
+  // Correo de la cuenta de caja (configurable por el administrador); la contraseña nunca viene escrita
+  const defaultCajeroEmail = config?.correoGenericoCajero || 'caja@dulzurasdebelgis.com';
+  const [cajeroEmail, setCajeroEmail] = useState(defaultCajeroEmail);
+  const [cajeroPassword, setCajeroPassword] = useState('');
   
   // Staff selection (configured and saved by the administrator)
   const predefinedStaff = config?.cajerosPredefinidos || [];
@@ -39,7 +39,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   }, [predefinedStaff]);
 
   // Admin credentials
-  const [adminEmail, setAdminEmail] = useState(defaultEmail);
+  const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
 
   const [loading, setLoading] = useState(false);
@@ -285,9 +285,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                   <label className="block text-xs font-bold text-stone-700">
                     Contraseña de cajero
                   </label>
-                  <span className="text-[10px] font-mono font-bold bg-pink-100 text-pink-700 px-2 py-0.5 rounded-md border border-pink-200">
-                    cajeroadmin
-                  </span>
                 </div>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -300,7 +297,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                   />
                 </div>
                 <p className="mt-1 text-[11px] text-stone-500">
-                  Usa tu correo con la clave <strong className="text-pink-700 font-mono">cajeroadmin</strong> para entrar a cobrar e ingresar productos.
+                  Usa el correo y la contraseña de la cuenta de caja que te dio el administrador.
                 </p>
               </div>
 

@@ -408,7 +408,7 @@ export const VentasView: React.FC<VentasViewProps> = ({
             Por política de seguridad y arqueo de caja, el Administrador tiene acceso a reportes, inventarios, configuración y productos, pero <strong>no realiza cobros ni ventas directas</strong>.
           </p>
           <div className="bg-white p-3.5 rounded-2xl border border-amber-200 text-xs text-stone-700 font-medium">
-            💡 Para registrar ventas en el Punto de Venta, inicia sesión con tu correo y la contraseña de cajero: <strong className="font-mono text-pink-700 bg-pink-50 px-2 py-0.5 rounded border border-pink-200">cajeroadmin</strong>
+            💡 Para registrar ventas en el Punto de Venta, inicia sesión en la pestaña de caja con el correo y la contraseña de la cuenta de caja.
           </div>
         </div>
       )}
